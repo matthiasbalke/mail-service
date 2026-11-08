@@ -1,0 +1,29 @@
+{
+  "name": "mail-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.4",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "build": "bun build src/main.ts src/index.ts --target bun --outdir dist --packages external",
+    "typecheck": "bun node_modules/typescript/bin/tsc --noEmit",
+    "test": "bun test tests/unit",
+    "test:integration": "bun test tests/integration --timeout 60000"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.4.0",
+    "@nestjs/core": "12.4.0",
+    "nodemailer": "10.4.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4",
+    "@types/nodemailer": "8.0.2",
+    "@types/smtp-server": "3.5.13",
+    "smtp-server": "3.21.3",
+    "typescript": "7.0.2",
+    "yaml": "2.9.1"
+  }
+}

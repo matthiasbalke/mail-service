@@ -1,0 +1,1 @@
+A Bun and NestJS mail service that sends email through configurable, authenticated SMTP connection pools with STARTTLS or SSL. Its asynchronous API supports concurrent submissions and per-message senders, while the application repeatedly sends a configured email with a 20-second pause between attempts. Errors are logged to the console only.

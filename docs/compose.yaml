@@ -1,0 +1,12 @@
+services:
+  mail:
+    image: ghcr.io/matthiasbalke/mail-service:latest
+    env_file:
+      - mail.env
+    restart: "no"
+    stop_grace_period: 15s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
