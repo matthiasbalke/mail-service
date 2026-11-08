@@ -17,11 +17,10 @@ Mail-service currently rebuilds images on version tags and publishes only amd64.
 ### New Capabilities
 
 - `image-promotion`: Portable action contract, commit-to-digest lookup, digest-preserving promotion, and release conflict handling.
-- `container-distribution`: Native multi-platform build verification, verified SHA/latest publication, and tag-triggered promotion integration.
 
 ### Modified Capabilities
 
-None in the main spec inventory. `container-distribution` exists only in the completed but unarchived `implement-mail-service` change. This proposal supersedes its amd64-only design and version-tag build behavior; reconcile that pending delta before archiving either change rather than silently merging contradictory publication requirements.
+- `container-distribution`: Extend the verified initial baseline with native multi-platform builds and replace its GHCR publication requirement with main-build publication and unprefixed SemVer tag promotion. Preserve unrelated container/runtime requirements.
 
 ## Impact
 

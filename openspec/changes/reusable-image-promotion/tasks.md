@@ -27,6 +27,6 @@
 
 ## Workflow follow-up
 
-- Reconcile the completed but unarchived `implement-mail-service` container-distribution delta with this change before archiving either. Preserve unrelated runtime and deployment requirements; replace the old tag-build publication contract with the final native-build and promotion contract.
+- When syncing this change, apply its explicit GHCR publication modification to the archived initial baseline and preserve unrelated runtime/deployment requirements and scenarios.
 - After merge, observe successful real amd64/arm64 main publication before creating a release tag, then verify its GHCR destination digest. Do not create release tags solely as a local test or claim remote success without run evidence.
 - Move the action to its own repository later by copying the self-contained directory and updating pinned uses references; this repository creation is outside the current change.

@@ -10,7 +10,7 @@ Reference inspection at katzenwanderweg commit `4527b73a7120e4b9e660816639db1b49
 - [verify.yaml](https://github.com/katzenwanderweg/katzenwanderweg/blob/4527b73a7120e4b9e660816639db1b496dd5d7cd/.github/workflows/verify.yaml) smoke-tests exact candidates and only then publishes verified `sha-<commit>` references.
 - [promote-images.yaml](https://github.com/katzenwanderweg/katzenwanderweg/blob/4527b73a7120e4b9e660816639db1b496dd5d7cd/.github/workflows/promote-images.yaml) reacts to published releases, executes trusted main automation, resolves the peeled tag commit, and invokes digest promotion. Its scripts enforce same-digest retries and reject release conflicts.
 
-We retain that registry mapping and digest-copy pattern, adapting the event to unprefixed SemVer tag pushes and removing its hardcoded repository list, private-package policy, and multi-platform-only restriction from the reusable action. Existing main specs are empty; `implement-mail-service` still carries the original container distribution delta. Do not modify that separate change during this proposal; reconcile its publication contract before archival.
+We retain that registry mapping and digest-copy pattern, adapting the event to unprefixed SemVer tag pushes and removing its hardcoded repository list, private-package policy, and multi-platform-only restriction from the reusable action. The user-verified `implement-mail-service` baseline is synced to main specs and archived. This change explicitly modifies its GHCR publication requirement while retaining unrelated container/runtime requirements and preserving the publication scenario names.
 
 ## Goals / Non-Goals
 
@@ -60,7 +60,7 @@ Serialize promotion by repository/image and release tag, with no cancellation of
 - [Action extraction breaks relative paths] → Keep every action dependency under its own directory and verify use from a workspace without mail-service files.
 - [More CI jobs and candidate images] → Matrix builds replace the current publish rebuild, reuse architecture caches, and use registry references for digest transport; candidate cleanup is an independent maintenance concern.
 - [Concurrent publication] → Serialize cooperating publishers and verify digest equality after writes; document external registry writers as a limitation.
-- [Pending OpenSpec overlap] → Reconcile `implement-mail-service`'s old GHCR publication requirement before archiving. Preserve unrelated container/runtime requirements and scenarios.
+- [Baseline publication compatibility] → The container-distribution delta explicitly replaces GHCR publication while preserving its scenario names and all unrelated main-spec requirements.
 
 ## Migration Plan
 

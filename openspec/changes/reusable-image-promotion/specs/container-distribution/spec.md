@@ -1,9 +1,5 @@
 # Spec Delta
 
-## Purpose
-
-Distribute validated native amd64 and arm64 images through a shared GHCR image index, separating main builds from digest-preserving version promotion.
-
 ## ADDED Requirements
 
 ### Requirement: Native platform verification
@@ -60,3 +56,20 @@ Documentation SHALL explain native runner selection, SHA mapping retention, lite
 #### Scenario: Follow release instructions
 - **WHEN** a maintainer follows the documented release procedure
 - **THEN** they wait for successful main publication, push an unprefixed SemVer tag for that commit, and verify the release tag shares its saved digest
+
+## MODIFIED Requirements
+
+### Requirement: GHCR publication
+GitHub Actions SHALL build and publish verified images to `ghcr.io/<lowercase-owner>/<lowercase-repository>` after successful default-branch validation, using commit-specific and latest tags. Unprefixed SemVer tag pushes SHALL promote an existing verified commit digest to the literal version tag without rebuilding or updating latest. Publishing SHALL use the workflow token with package write permission.
+
+#### Scenario: Publish default branch
+- **WHEN** a default-branch push passes required validation on both native architectures
+- **THEN** its verified image index is published with a commit-specific tag and latest is updated only when the commit is still main HEAD
+
+#### Scenario: Publish release tag
+- **WHEN** an unprefixed SemVer tag points at a commit with an existing verified SHA image
+- **THEN** that image digest is promoted to the literal version tag without rebuilding or modifying the SHA tag or latest
+
+#### Scenario: Failed validation
+- **WHEN** a required validation step fails
+- **THEN** no verified SHA or latest image is published for that workflow run and no release promotion can use its unverified candidates
