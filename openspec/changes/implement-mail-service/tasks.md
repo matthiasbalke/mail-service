@@ -40,11 +40,11 @@
 
 ## 4. GitHub Actions validation and publishing
 
-- [ ] 4.1 Add workflows for pull requests, default-branch pushes, and `v*` tags with frozen install, type checking, isolated unit tests, production build, and Docker build; verify workflow syntax and run the same validation commands locally.
-- [ ] 4.2 Add a validation-gated GHCR publication job using `GITHUB_TOKEN`, package write permission, lowercase image paths, and SHA/latest/version tags; verify event conditions prevent publishing on pull requests or failed checks and tag generation matches the specification.
+- [x] 4.1 Add workflows for pull requests, default-branch pushes, and `v*` tags with frozen install, type checking, isolated unit tests, production build, and Docker build; verify workflow syntax and run the same validation commands locally.
+- [x] 4.2 Add a validation-gated GHCR publication job using `GITHUB_TOKEN`, package write permission, lowercase image paths, and SHA/latest/version tags; verify event conditions prevent publishing on pull requests or failed checks and tag generation matches the specification.
 - [x] 4.3 Document image naming, publication triggers, and immutable tag use in `docs/examples.md`; verify documentation matches workflow conditions and generated tags.
 
 ## 5. End-to-end acceptance
 
-- [ ] 5.1 Run frozen installation, type checking, all tests, production build, bounded source/built recurring-loop and signal-termination checks, Docker build/smoke checks, and Compose validation together; verify the complete local path uses fake transports or a controlled local SMTP fixture without production credentials and all three capability specs are satisfied.
-- [ ] 5.2 Review workflow publication configuration and report any checks requiring a real eligible GitHub Actions run; distinguish locally verified behavior from publication that has actually executed.
+- [x] 5.1 Run frozen installation, type checking, all tests, production build, bounded source/built recurring-loop and signal-termination checks, Docker build/smoke checks, and Compose validation together; verify the complete local path uses fake transports or a controlled local SMTP fixture without production credentials and all three capability specs are satisfied.
+- [x] 5.2 Review workflow publication configuration and report any checks requiring a real eligible GitHub Actions run; distinguish locally verified behavior from publication that has actually executed.
