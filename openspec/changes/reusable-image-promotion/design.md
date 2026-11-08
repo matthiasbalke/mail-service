@@ -10,7 +10,7 @@ Reference inspection at katzenwanderweg commit `4527b73a7120e4b9e660816639db1b49
 - [verify.yaml](https://github.com/katzenwanderweg/katzenwanderweg/blob/4527b73a7120e4b9e660816639db1b496dd5d7cd/.github/workflows/verify.yaml) smoke-tests exact candidates and only then publishes verified `sha-<commit>` references.
 - [promote-images.yaml](https://github.com/katzenwanderweg/katzenwanderweg/blob/4527b73a7120e4b9e660816639db1b496dd5d7cd/.github/workflows/promote-images.yaml) reacts to published releases, executes trusted main automation, resolves the peeled tag commit, and invokes digest promotion. Its scripts enforce same-digest retries and reject release conflicts.
 
-We retain that registry mapping and digest-copy pattern, adapting the event to v* tag pushes and removing its hardcoded repository list, private-package policy, and multi-platform-only restriction from the reusable action. Existing main specs are empty; `implement-mail-service` still carries the original container distribution delta. Do not modify that separate change during this proposal; reconcile its publication contract before archival.
+We retain that registry mapping and digest-copy pattern, adapting the event to unprefixed SemVer tag pushes and removing its hardcoded repository list, private-package policy, and multi-platform-only restriction from the reusable action. Existing main specs are empty; `implement-mail-service` still carries the original container distribution delta. Do not modify that separate change during this proposal; reconcile its publication contract before archival.
 
 ## Goals / Non-Goals
 
@@ -46,7 +46,7 @@ Keep inspection/copy behavior in this one action, rather than building a new pub
 
 ### Tag pushes select the release commit
 
-Add `.github/workflows/promote-images.yaml` with `push.tags: ['v*']`; remove tag events from the build workflow. The workflow uses contents read and packages write permissions, logs in with `GITHUB_TOKEN`, and invokes the action with the literal Git tag as `destination-tag`. No prefix stripping, floating version aliases, or latest updates.
+Add `.github/workflows/promote-images.yaml` with a broad numeric tag filter `push.tags: ['[0-9]*.[0-9]*.[0-9]*']` and a strict unprefixed SemVer validation step before registry access; remove tag events from the build workflow. The workflow uses contents read and packages write permissions, logs in with `GITHUB_TOKEN`, and invokes the action with the literal Git tag as `destination-tag`. The Actions filter is a glob, not a SemVer validator. Accept canonical MAJOR.MINOR.PATCH versions and valid prerelease identifiers, with no leading zeroes in numeric identifiers. Reject prefixed tags and malformed numeric candidates before promotion. Reject build metadata (`+...`) explicitly because Docker tags cannot contain `+`; do not silently normalize versions. Preserve tags such as `1.2.3` and `1.2.3-rc.1` verbatim. No prefix stripping, floating version aliases, or latest updates.
 
 Checkout trusted automation from main with credentials persistence disabled and fetch the pushed tag explicitly. Peel `refs/tags/<tag>^{commit}` and compare it to the event commit, supporting lightweight and annotated tags and detecting a moved ref. Pass tag/input values through environment variables and quoted arguments. Never execute scripts from the release commit. A missing verified source fails promptly; the operator reruns the failed promotion after main publication succeeds. Do not add a polling/orchestration workflow.
 
@@ -64,8 +64,8 @@ Serialize promotion by repository/image and release tag, with no cancellation of
 
 ## Migration Plan
 
-1. Implement and test the action and native matrix together, retaining the current image path and literal v* version tag convention.
+1. Implement and test the action and native matrix together, retaining the current image path and adopting literal unprefixed SemVer tags such as `1.2.3`.
 2. Merge workflows to main and wait for the first verified amd64/arm64 SHA index before creating a version tag. Older pre-migration SHA images may remain amd64-only; new main publications must satisfy the dual-platform contract.
-3. Verify a real v* tag promotion shares the saved digest. Do not claim registry success from local tests alone.
+3. Verify a real `1.2.3`-style tag promotion shares the saved digest. Do not claim registry success from local tests alone.
 4. Roll back workflow changes if necessary; existing version images remain usable by digest. Do not move an existing release tag to a different digest.
 5. Later copy the self-contained action directory into its own repository, publish/pin its revision, and change consumers' `uses:` references. No action input or build-side mapping change is required.

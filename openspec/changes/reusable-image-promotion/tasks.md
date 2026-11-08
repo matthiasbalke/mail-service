@@ -16,8 +16,8 @@
 
 ## 3. Tag-triggered release promotion
 
-- [ ] 3.1 Add the v* push promotion workflow with trusted main automation checkout, explicit tag fetch and commit peeling, moved-tag detection, contents read/packages write permissions, and destination-specific concurrency; verify lightweight and annotated tags resolve correctly and unrelated/release-only events do not promote.
-- [ ] 3.2 Invoke the action with the tagged commit and literal v* Docker tag after Buildx setup and registry login; verify no build command or latest mutation occurs, missing sources fail with rerun guidance, repeat promotion is a no-op, and conflicting destinations fail.
+- [ ] 3.1 Add the unprefixed SemVer tag-push promotion workflow with a numeric glob and strict version validation with trusted main automation checkout, explicit tag fetch and commit peeling, moved-tag detection, contents read/packages write permissions, and destination-specific concurrency; verify lightweight and annotated tags resolve correctly and unrelated/release-only events do not promote, valid `1.2.3` and `1.2.3-rc.1` tags work, and v-prefixed tags, leading-zero versions, malformed candidates, and build metadata cannot promote.
+- [ ] 3.2 Invoke the action with the tagged commit and literal unprefixed SemVer Docker tag after Buildx setup and registry login; verify no build command or latest mutation occurs, missing sources fail with rerun guidance, repeat promotion is a no-op, and conflicting destinations fail.
 - [ ] 3.3 Document waiting for main publication, pushing a version tag, checking digest equality, recovering from premature tagging, and extracting the action later; validate examples against action inputs and workflow triggers.
 
 ## 4. Integration verification

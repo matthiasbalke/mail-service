@@ -8,7 +8,7 @@ Mail-service currently rebuilds images on version tags and publishes only amd64.
 
 - Build and smoke-test native amd64/arm64 candidates in a runner matrix, then publish one verified image index under `sha-<full commit SHA>` and `latest` on successful main builds.
 - Add a self-contained composite promotion action in `.github/actions/promote-image` that resolves the saved commit image and copies its exact digest to a caller-specified Docker tag without rebuilding.
-- Run a separate promotion workflow on `v*` tag pushes. Preserve the literal version tag and fail when its commit has no verified image.
+- Run a separate promotion workflow on unprefixed SemVer tag pushes such as `1.2.3`. Preserve the literal version tag and fail when its commit has no verified image.
 - **BREAKING**: Version tags no longer initiate builds. Release commits must first complete main publication; version tags cannot overwrite a different published digest.
 - Document the two-workflow contract, native runner requirements, and later extraction of the action to its own repository.
 
