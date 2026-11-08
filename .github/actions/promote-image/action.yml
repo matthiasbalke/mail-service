@@ -1,0 +1,30 @@
+name: Promote image
+description: Tag a previously verified commit image without rebuilding
+inputs:
+  image:
+    description: Registry/repository without tag or digest
+    required: true
+  source-sha:
+    description: Full lowercase Git commit SHA saved under sha-<commit>
+    required: true
+  destination-tag:
+    description: Destination Docker tag in the same repository
+    required: true
+outputs:
+  digest:
+    description: Promoted sha256 digest
+    value: ${{ steps.promote.outputs.digest }}
+  image:
+    description: Digest-qualified image reference
+    value: ${{ steps.promote.outputs.image }}
+runs:
+  using: composite
+  steps:
+    - id: promote
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        IMAGE: ${{ inputs.image }}
+        SOURCE_SHA: ${{ inputs.source-sha }}
+        DESTINATION_TAG: ${{ inputs.destination-tag }}
+      run: bash "$ACTION_PATH/promote.sh"

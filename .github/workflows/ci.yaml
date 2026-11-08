@@ -3,7 +3,6 @@ on:
   pull_request:
   push:
     branches: [main]
-    tags: ['v*']
 permissions:
   contents: read
 concurrency:
@@ -11,7 +10,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -29,56 +28,101 @@ jobs:
           cp docs/.env.example local/.env
           trap 'rm -f local/.env' EXIT
           docker compose --env-file local/.env -f docs/compose.yaml config --quiet
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-      - name: Build runtime image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
-        with:
-          context: .
-          load: true
-          push: false
-          platforms: linux/amd64
-          tags: mail-service:local
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Verify runtime, TLS delivery, shutdown and image size
-        run: bun scripts/docker-smoke.ts mail-service:local
-  publish:
+      - name: Test image promotion policy
+        run: python3 .github/actions/promote-image/tests/test_promote.py
+      - name: Verify manifest promotion and publication with a local registry
+        run: |
+          python3 .github/actions/promote-image/tests/test_registry.py
+          python3 tests/ci/test_publication.py
+      - name: Validate workflow contracts
+        run: bun test tests/ci/workflows.test.ts
+  native:
     needs: validate
-    if: >-
-      github.event_name == 'push' &&
-      (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/tags/v'))
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: amd64
+            runner: ubuntu-24.04
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-      - name: Determine image name
+      - name: Determine candidate image name
         id: image
-        shell: bash
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        env:
+          ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "candidate=ghcr.io/${GITHUB_REPOSITORY,,}:candidate-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ARCHITECTURE" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build native candidate
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          platforms: linux/${{ matrix.architecture }}
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: ${{ github.event_name == 'push' && steps.image.outputs.candidate || 'mail-service:local' }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          provenance: ${{ github.event_name == 'push' && 'mode=min' || 'false' }}
+          cache-from: type=gha,scope=image-${{ matrix.architecture }}
+          cache-to: type=gha,scope=image-${{ matrix.architecture }},mode=max
+      - name: Smoke-test exact native image
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          reference=mail-service:local
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            reference="$IMAGE@$DIGEST"
+            docker pull "$reference"
+          fi
+          bun scripts/docker-smoke.ts "$reference"
+  publish:
+    needs: [validate, native]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: verified-main-images-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
-        id: meta
-        with:
-          images: ${{ steps.image.outputs.name }}
-          flavor: latest=false
-          tags: |
-            type=raw,value=sha-${{ github.sha }}
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
-            type=ref,event=tag
-      - name: Publish validated image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
-        with:
-          context: .
-          push: true
-          platforms: linux/amd64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
+      - name: Publish verified native index
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHECKS_RESULT: ${{ needs.validate.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}" bash scripts/publish-images.sh

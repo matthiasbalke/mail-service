@@ -4,7 +4,7 @@ The application waits 20 seconds before sending its first configured message. Af
 
 ## Environment configuration
 
-Copy `docs/mail.env.example` to `docs/mail.env`, then replace the placeholder hosts, credentials, sender addresses, and recipient. Values are read once at startup; restart the service to change them. Keep the resulting credentials file out of Git.
+Copy `docs/.env.example` to `local/.env` (create `local/` first), then replace the placeholder hosts, credentials, sender addresses, and recipient. Values are read once at startup; restart the service to change them. Keep the resulting credentials file out of Git.
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
@@ -39,10 +39,12 @@ Supply both nonempty username and password or omit both entirely. All pool limit
 ## Docker
 
 ```sh
-cp docs/mail.env.example docs/mail.env
-# Edit docs/mail.env before starting; the app repeatedly sends real emails.
+mkdir -p local
+cp docs/.env.example local/.env
+# Edit local/.env before starting; the app repeatedly sends real emails.
 docker run -d --name mail-service \
-  --env-file docs/mail.env \
+  --env-file local/.env \
+  --mount "type=bind,source=$(pwd)/local/certs/ca.crt,target=/tmp/ca.crt,readonly" \
   --read-only --cap-drop ALL --security-opt no-new-privileges \
   --stop-timeout 15 \
   ghcr.io/matthiasbalke/mail-service:latest
@@ -52,22 +54,27 @@ docker stop -t 15 mail-service
 docker rm mail-service
 ```
 
+The CA mount above is required when using the supplied `NODE_EXTRA_CA_CERTS=/tmp/ca.crt` setting; generate it as shown in the Compose example below. Remove that setting and mount when using only publicly trusted certificates.
+
 The image runs as UID/GID `65532:65532`, exposes no ports, and needs no persistent volumes. Both profiles from the environment file are available; only `MAIL_SMTP_PROFILE` is used by the recurring loop. Error-level logs go to the console (stderr) using the NestJS logger. The app never writes log files and does not log credentials, email contents, or raw SMTP exchanges. Docker may retain console output through its own logging driver.
 
 ## Docker Compose
 
-`docs/compose.yaml` uses the same two-profile environment file:
+`docs/compose.yaml` uses `local/.env` and includes a Mailpit test SMTP server. Generate its certificates with mkcert, then copy the local CA certificate into the mount directory. Run these commands from the repository root (the helper scripts require zsh):
 
 ```sh
-cp docs/mail.env.example docs/mail.env
-# Edit the copied file with your SMTP settings and message.
-docker compose -f docs/compose.yaml config --quiet
-docker compose -f docs/compose.yaml up -d
-docker compose -f docs/compose.yaml logs -f mail
-docker compose -f docs/compose.yaml down
+mkdir -p local
+cp docs/.env.example local/.env
+zsh scripts/generate-local-https-certificates.zsh
+cp "$(mkcert -CAROOT)/rootCA.pem" local/certs/ca.crt
+# Edit local/.env with your SMTP settings and message.
+zsh app.zsh config --quiet
+zsh app.zsh up -d
+zsh app.zsh logs -f mail
+zsh app.zsh down
 ```
 
-The Compose configuration runs with a read-only filesystem and no log volume or published ports. Its 15-second stop grace period accommodates the shared maximum 10-second sender drain.
+The mail container uses a read-only filesystem, mounts the CA certificate, and exposes no ports. Mailpit publishes SMTP on loopback port 1025 and its web UI on port 8025. To use it, configure the selected profile with host `smtp.dev.example.com`, port `1025`, security `starttls`, and the same user/password as `SMTP_USER`/`SMTP_PASSWORD`. The example defaults still point profiles at placeholder external hosts. Compose restarts the mail container unless stopped; its 15-second stop grace period accommodates the shared maximum 10-second sender drain.
 
 ## Programmatic sending
 
@@ -136,4 +143,26 @@ bun scripts/docker-smoke.ts mail-service:local
 
 `bun test` runs both unit and integration tests after `bun run build`; `bun run test` runs only isolated unit tests. The Docker smoke test uses disposable containers and generated test certificates to verify STARTTLS, recurring delivery, non-root execution, and shutdown, and reports final image size. It never needs real SMTP credentials. Production builds include only application output and production dependencies in a distroless Bun runtime; development tools and tests are excluded.
 
-GitHub Actions validates pull requests, pushes to `main` (the default branch), and `v*` tags. After validation, default-branch pushes publish `ghcr.io/matthiasbalke/mail-service:latest` and `:sha-<full-commit-sha>`; `v*` tags publish their literal tag (for example `:v1.0.0`) plus the SHA tag. Pull requests never publish. Publication uses the workflow's `GITHUB_TOKEN` with package-write permission; repository settings must allow it. Prefer an immutable SHA tag for deployment and rollback. Publication is only confirmed after the corresponding workflow succeeds.
+## Native builds and release promotion
+
+The build workflow validates pull requests and pushes to `main`. Required application checks and Compose validation run first. The image matrix uses native amd64 (`ubuntu-24.04`) and arm64 (`ubuntu-24.04-arm`) runners with separate architecture caches; it uses no emulation. Each architecture runs the Docker smoke test for runtime identity, CA trust, TLS mail delivery, and shutdown. The repository must have access to both runner labels.
+
+Pull requests load and test local images without registry login or publication. Main builds push run-specific `candidate-<commit>-<run-id>-<attempt>-<architecture>` tags and smoke-test their exact digests. A candidate is not release eligible. Only after both architectures and all required checks pass does the publication job assemble their exact descriptors and attestations into `ghcr.io/matthiasbalke/mail-service:sha-<full-commit-sha>`. It also updates `latest` when the commit is still main HEAD. Reruns preserve an existing verified SHA digest. Keep verified SHA tags and their referenced blobs for as long as releases need them; automation treats them as immutable, although the registry does not enforce this convention. Candidate tags can be cleaned up independently after runs finish.
+
+Publication uses `GITHUB_TOKEN` with `contents: read` and `packages: write`; the GHCR package must grant this repository access. A passing local test does not confirm registry publication: check the actual build workflow and its verified-image summary.
+
+The separate promotion workflow reacts to **unprefixed SemVer tag pushes**, such as `1.2.3` or `1.2.3-rc.1`. It resolves lightweight or annotated tags to their commit, reads that commit's verified SHA image, and assigns its exact digest to the literal version Docker tag. It never rebuilds or changes `latest`. It rejects v-prefixed tags, malformed versions, and `+build` metadata (Docker tags cannot contain `+`). GitHub release publication alone does not trigger promotion.
+
+After main publication succeeds, create a tag for that verified commit:
+
+```sh
+git tag 1.2.3 <verified-full-commit-sha>
+git push origin 1.2.3
+# After the promotion workflow succeeds, compare these digest values:
+docker buildx imagetools inspect ghcr.io/matthiasbalke/mail-service:sha-<verified-full-commit-sha>
+docker buildx imagetools inspect ghcr.io/matthiasbalke/mail-service:1.2.3
+```
+
+If the tag arrives before a verified image exists, promotion fails: wait for main publication, then rerun the failed promotion workflow. Repeating the same promotion succeeds without writing; a version tag already pointing at a different digest fails without overwriting. Workflow concurrency serializes writers per image/version, but independent external registry writers must follow the same policy.
+
+The reusable action lives in [`.github/actions/promote-image`](../.github/actions/promote-image/README.md). Its three inputs are image repository, source commit SHA, and destination Docker tag. It uses the caller's registry login. Later it can be copied intact into its own action repository and callers can switch from the local path to a pinned remote `uses:` reference without changing inputs or the saved SHA mapping.
